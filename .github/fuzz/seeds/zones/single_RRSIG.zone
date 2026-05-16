@@ -1,0 +1,5 @@
+$ORIGIN example.org.
+$TTL 3600
+@ IN SOA ns1 hostmaster (1 7200 3600 1209600 3600)
+@ IN NS ns1
+test IN RRSIG A 5 3 86400 20240601000000 20240501000000 12345 example.org. abcdef==

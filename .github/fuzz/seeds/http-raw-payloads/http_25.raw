@@ -1,0 +1,4 @@
+GET /img.png HTTP/1.1
+Host: cdn.example.org
+Range: bytes=0-1023
+

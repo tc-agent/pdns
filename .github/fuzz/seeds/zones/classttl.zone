@@ -1,0 +1,6 @@
+$ORIGIN example.org.
+@ 3600 IN SOA ns1 hostmaster 1 7200 3600 1209600 3600
+@ IN 3600 NS ns1
+@ 60 A 1.2.3.4
+@ A 1.2.3.5
+mail MX 10 mail1

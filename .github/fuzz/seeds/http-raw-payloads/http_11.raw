@@ -1,0 +1,4 @@
+GET / HTTP/1.1
+Host: example.org
+Cookie: a=1; b=2; c=3
+

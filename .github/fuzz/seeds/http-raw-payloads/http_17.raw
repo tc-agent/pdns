@@ -1,0 +1,4 @@
+HTTP/1.0 500 Internal Server Error
+Connection: close
+Content-Length: 0
+

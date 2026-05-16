@@ -1,0 +1,9 @@
+$ORIGIN example.org.
+$TTL 3600
+@ IN SOA ns1 hostmaster (1 7200 3600 1209600 3600)
+@ IN NS ns1
+a IN TXT "v=spf1 include:_spf.example.org -all"
+b IN TXT "chunk one" "chunk two"
+c IN TXT "\"escaped\" quote inside"
+d IN TXT "\032 embedded"
+e IN SPF "v=spf1 -all"

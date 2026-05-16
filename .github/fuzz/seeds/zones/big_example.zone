@@ -1,0 +1,57 @@
+$ORIGIN example.org.
+$TTL 3600
+@                IN  SOA   ns1.example.org. hostmaster.example.org. (
+                                  2024010101 ; serial
+                                  7200       ; refresh
+                                  3600       ; retry
+                                  1209600    ; expire
+                                  3600       ; minimum
+                            )
+@                IN  NS    ns1.example.org.
+@                IN  NS    ns2.example.org.
+@                IN  MX    10 mail.example.org.
+@                IN  MX    20 mail2.example.org.
+@                IN  A     192.0.2.1
+@                IN  A     192.0.2.2
+@                IN  AAAA  2001:db8::1
+@                IN  TXT   "v=spf1 include:_spf.example.org -all"
+@                IN  TXT   "hello" "world"
+@                IN  CAA   0 issue "ca.example.net"
+@                IN  HINFO "INTEL-64" "LINUX"
+@                IN  LOC   51 30 12.748 N 0 7 39.612 W 17.0m 1m 10000m 10m
+@                IN  URI   10 1 "ftp://ftp.example.org/pub"
+@                IN  DNSKEY 256 3 5 AwEAAarTiHhPgvD28WjN6USycV1uvW70iVeUVDW38jBfdvHUMfPdkOILTtmpwhrL+JFkCL5BlOmsdYHKKDc5T9KrlZRBKDh8VRC7vpvuLrK48ttx+PEWiLnyR05oFEjxiPbgQQYV1eR74xnYg1Knj42tQT2zLs9zXB1S4P9kuoQ7HnoR
+@                IN  CDNSKEY 256 3 5 AwEAAarTiHhPgvD28WjN6USycV1uvW70iVeUVDW38jBfdvHUMfPdkOILTtmpwhrL+JFkCL5BlOmsdYHKKDc5T9KrlZRBKDh8VRC7vpvuLrK48ttx+PEWiLnyR05oFEjxiPbgQQYV1eR74xnYg1Knj42tQT2zLs9zXB1S4P9kuoQ7HnoR
+@                IN  DS    12345 5 1 123456789abcdef67890123456789abcdef67890
+@                IN  CDS   12345 5 1 123456789abcdef67890123456789abcdef67890
+@                IN  CDS   0 0 0 00
+@                IN  ZONEMD 2018031500 1 1 FEBE3D4CE2EC2FFA4BA99D46CD69D6D29711E55217057BEE7EB1A7B641A47BA7FED2DD5B97AE499FAFA4F22C6BD647DE
+@                IN  CSYNC 12345 3 A NS AAAA
+@                IN  CERT  1 12345 5 dGVzdA==
+@                IN  OPENPGPKEY AAAA==
+ns1              IN  A     192.0.2.53
+ns2              IN  AAAA  2001:db8::53
+mail             IN  A     192.0.2.25
+www              IN  A     192.0.2.80
+www              IN  AAAA  2001:db8::80
+www              IN  HTTPS 1 . alpn=h2,h3 port=443
+www              IN  SVCB  1 . alpn=h2,h3 port=443
+sip              IN  SRV   10 20 5060 sipserver.example.org.
+naptr            IN  NAPTR 100 10 "u" "E2U+sip" "!^.*$!sip:info@example.org!" .
+afsdb            IN  AFSDB 1 afs.example.org.
+kx               IN  KX    10 kx.example.org.
+*                IN  A     192.0.2.100
+host1            IN  TLSA  3 1 1 abcdef0123456789
+sub.example.org. IN  DNAME target.example.org.
+secure           IN  RRSIG A 5 3 86400 20240601000000 20240501000000 12345 example.org. abcdef==
+mailbox          IN  RP    rmailbox.example.org. txt.example.org.
+gw               IN  IPSECKEY 10 1 2 192.0.2.38 AQNRU3mG7TVTO2BkR47usntb102uFJtugbo6BSGvgqt4AQ==
+key              IN  KEY   256 3 5 AwEAAarTiHhPgvD28WjN6USycV1uvW70iVeUVDW38jBfdvHUMfPdkOIL
+ssh              IN  SSHFP 1 1 123456789abcdef67890123456789abcdef67890
+smime            IN  SMIMEA 3 1 1 abcdef0123456789
+apl              IN  APL   1:192.168.32.0/21 !1:192.168.38.0/28
+eui48            IN  EUI48 00-00-5e-00-53-2a
+eui64            IN  EUI64 00-00-5e-ef-10-00-00-2a
+nsec             IN  NSEC  alpha.example.org. A NS RRSIG NSEC
+nsec3            IN  NSEC3 1 0 1 ABCD VR6URURRFOJDP9HSV9PA53A5N1FFA6PD A NS SOA RRSIG
+nsec3param       IN  NSEC3PARAM 1 0 1 ABCD

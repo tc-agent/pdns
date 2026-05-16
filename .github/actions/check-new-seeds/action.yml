@@ -1,0 +1,27 @@
+name: Verify new seeds
+description: Run libfuzzer -merge=1 over (baseline + new) seeds for each harness with newly-added seeds in the PR. Hard-fail if any new seed is redundant.
+
+inputs:
+  project:
+    description: Project name.
+    required: true
+  base_sha:
+    description: Git base SHA to diff against (typically merge-base with the default branch).
+    required: true
+  out_base:
+    description: Directory containing the per-project oss-fuzz out tree (e.g. build/out, /tmp/oss-fuzz/build/out).
+    required: true
+  seeds_dir:
+    description: Workspace-relative seeds root grouped by harness (e.g. projects/<name>/seeds, .github/fuzz/seeds).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        PROJECT: ${{ inputs.project }}
+        BASE_SHA: ${{ inputs.base_sha }}
+        OUT_BASE: ${{ inputs.out_base }}
+        SEEDS_DIR: ${{ inputs.seeds_dir }}
+      run: python3 "$GITHUB_ACTION_PATH/check_new_seeds.py"

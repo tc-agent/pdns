@@ -1,0 +1,5 @@
+$ORIGIN example.org.
+$TTL 3600
+@ IN SOA ns1 hostmaster (1 7200 3600 1209600 3600)
+@ IN NS ns1
+test IN APL 1:192.168.32.0/21 !1:192.168.38.0/28

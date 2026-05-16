@@ -1,0 +1,69 @@
+name: Collect fuzz stats
+description: Dump coverage summaries (project-wide + per-harness) and corpus file counts into stats-<variant>/ for the report job.
+
+inputs:
+  project:
+    description: Project name.
+    required: true
+  variant:
+    description: Variant label — "baseline" or "current".
+    required: true
+  sha:
+    description: Commit SHA measured in this variant.
+    required: true
+  has_project:
+    description: String "true" if the project was present and built for this variant; otherwise only meta.json is written.
+    required: true
+  out_base:
+    description: Directory containing the oss-fuzz out tree (e.g. build/out for oss-fuzz template, /tmp/oss-fuzz/build/out for upstream).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        PROJECT: ${{ inputs.project }}
+        VARIANT: ${{ inputs.variant }}
+        SHA: ${{ inputs.sha }}
+        HAS_PROJECT: ${{ inputs.has_project }}
+        OUT_BASE: ${{ inputs.out_base }}
+      run: |
+        OUT="stats-$VARIANT"
+        mkdir -p "$OUT/harness"
+
+        jq -n \
+          --arg variant "$VARIANT" \
+          --arg sha "${SHA:-}" \
+          --arg project "$PROJECT" \
+          --arg has_project "${HAS_PROJECT:-false}" \
+          '{variant: $variant, sha: $sha, project: $project, has_project: ($has_project == "true")}' \
+          > "$OUT/meta.json"
+
+        if [ "$HAS_PROJECT" != "true" ]; then
+          echo "No project at this variant; stats collection skipped"
+          exit 0
+        fi
+
+        PROJ_SUM=$(find "$OUT_BASE/$PROJECT/report/linux" -maxdepth 1 -name summary.json 2>/dev/null | head -1 || true)
+        if [ -n "$PROJ_SUM" ]; then
+          cp "$PROJ_SUM" "$OUT/project.summary.json"
+        fi
+
+        if [ -d "$OUT_BASE/$PROJECT/report_target" ]; then
+          for d in "$OUT_BASE/$PROJECT/report_target"/*/linux; do
+            [ -d "$d" ] || continue
+            HNAME=$(basename "$(dirname "$d")")
+            [ -f "$d/summary.json" ] && cp "$d/summary.json" "$OUT/harness/$HNAME.summary.json"
+          done
+        fi
+
+        # summary.json carries only the harness-inclusive scalar; the per-function
+        # list is what lets the report exclude harness functions, so ship that.
+        INSPECTOR_FUNCS="$OUT_BASE/$PROJECT/inspector/all-fuzz-introspector-functions.json"
+        if [ -f "$INSPECTOR_FUNCS" ]; then
+          cp "$INSPECTOR_FUNCS" "$OUT/reachability.json"
+        fi
+
+        echo "---- $OUT ----"
+        find "$OUT" -type f -printf '%p (%s bytes)\n'
