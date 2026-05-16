@@ -22,6 +22,7 @@
 
 #include "dnsparser.hh"
 #include "dnsrecords.hh"
+#include "dnswriter.hh"
 #include "statbag.hh"
 
 StatBag S;
@@ -31,6 +32,47 @@ bool g_slogStructured{false};
 static void init()
 {
   reportAllTypes();
+}
+
+static void exerciseParsed(const MOADNSParser& parser)
+{
+  // Force the text-form serialisation of every parsed record. This exercises
+  // the per-type getZoneRepresentation() / rcpgenerator paths, which the
+  // wire-only parse path otherwise leaves untouched.
+  for (const auto& record : parser.d_answers) {
+    try {
+      (void)record.toString();
+    }
+    catch (const std::exception&) {
+    }
+    catch (const PDNSException&) {
+    }
+  }
+
+  // Re-serialise the parsed records to wire format to exercise
+  // DNSPacketWriter and the per-type toPacket() implementations.
+  try {
+    std::vector<uint8_t> packet;
+    DNSPacketWriter writer(packet, parser.d_qname, parser.d_qtype, parser.d_qclass);
+    for (const auto& record : parser.d_answers) {
+      if (!record.getContent()) {
+        continue;
+      }
+      writer.startRecord(record.d_name, record.d_type, record.d_ttl, record.d_class, record.d_place);
+      try {
+        record.getContent()->toPacket(writer);
+      }
+      catch (const std::exception&) {
+      }
+      catch (const PDNSException&) {
+      }
+    }
+    writer.commit();
+  }
+  catch (const std::exception&) {
+  }
+  catch (const PDNSException&) {
+  }
 }
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size);
@@ -50,6 +92,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 
   try {
     MOADNSParser moaQuery(true, reinterpret_cast<const char*>(data), size);
+    exerciseParsed(moaQuery);
   }
   catch (const std::exception& e) {
   }
@@ -58,6 +101,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 
   try {
     MOADNSParser moaAnswer(false, reinterpret_cast<const char*>(data), size);
+    exerciseParsed(moaAnswer);
   }
   catch (const std::exception& e) {
   }
