@@ -1,0 +1,5 @@
+$ORIGIN example.org.
+$TTL 3600
+@ IN SOA ns1 hostmaster (1 7200 3600 1209600 3600)
+@ IN NS ns1
+test IN SVCB 1 svc.example.org. alpn=h2,h3 port=443

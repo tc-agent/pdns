@@ -1,0 +1,8 @@
+$ORIGIN example.org.
+$TTL 60
+@           IN  SOA  ns1 hostmaster (1 7200 3600 1209600 3600)
+@           IN  NS   ns1
+$GENERATE 1-200 host$ A 10.0.0.$
+$GENERATE 1-200 host$ AAAA 2001:db8::$
+$GENERATE 1-50/2 r$ CNAME host$
+$GENERATE 1-10 sub${0,1,d} A 192.0.2.$

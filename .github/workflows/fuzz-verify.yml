@@ -1,0 +1,189 @@
+# Template — injected into upstream repo fork branches by pr_server.py at PR submission time.
+# Not used directly in this repo. Injected alongside .github/actions/{collect-fuzz-stats,post-fuzz-report}/.
+name: Fuzz Verify
+on: [push]
+
+permissions:
+  # Default to read-only at the workflow level; the report job elevates to pull-requests:write.
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PROJECT: powerdns
+  FUZZ_SECONDS: "300"
+
+jobs:
+  measure:
+    name: Measure (${{ matrix.variant }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: ${{ matrix.variant == 'baseline' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, current]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Resolve variant
+        id: variant
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          if [ "$VARIANT" = "baseline" ]; then
+            git remote set-head origin -a >/dev/null 2>&1 || true
+            DEFAULT_BRANCH=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|origin/||')
+            [ -z "$DEFAULT_BRANCH" ] && DEFAULT_BRANCH=main
+            if ! git rev-parse --verify "origin/$DEFAULT_BRANCH" >/dev/null 2>&1; then
+              DEFAULT_BRANCH=master
+            fi
+            BASE_SHA=$(git merge-base "origin/$DEFAULT_BRANCH" HEAD)
+            echo "sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+            echo "Baseline: $BASE_SHA (merge-base with origin/$DEFAULT_BRANCH)"
+
+            if [ ! -d .github/fuzz ]; then
+              echo "::error::.github/fuzz not present on PR — cannot overlay onto baseline"
+              echo "has_project=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            FUZZ_TMP=$(mktemp -d)
+            cp -r .github/fuzz "$FUZZ_TMP/"
+            ACTIONS_TMP=$(mktemp -d)
+            cp -r .github/actions "$ACTIONS_TMP/"
+            git reset --hard "$BASE_SHA"
+            git submodule update --init --recursive
+            rm -rf .github/fuzz .github/actions
+            mkdir -p .github
+            cp -r "$FUZZ_TMP/fuzz" .github/
+            cp -r "$ACTIONS_TMP/actions" .github/
+            echo "has_project=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            echo "has_project=true" >> "$GITHUB_OUTPUT"
+            echo "Current: $GITHUB_SHA"
+          fi
+
+      - name: Clone oss-fuzz
+        if: steps.variant.outputs.has_project == 'true'
+        run: git clone --depth 1 https://github.com/google/oss-fuzz.git /tmp/oss-fuzz
+
+      - name: Install oss-fuzz deps
+        if: steps.variant.outputs.has_project == 'true'
+        run: pip install -r /tmp/oss-fuzz/infra/ci/requirements.txt 2>/dev/null || pip install docker
+
+      - name: Set up project
+        if: steps.variant.outputs.has_project == 'true'
+        run: |
+          mkdir -p "/tmp/oss-fuzz/projects/$PROJECT"
+          cp -r .github/fuzz/* "/tmp/oss-fuzz/projects/$PROJECT/"
+
+      - name: Build image
+        if: steps.variant.outputs.has_project == 'true'
+        run: echo n | python3 /tmp/oss-fuzz/infra/helper.py build_image "$PROJECT"
+
+      - name: Build fuzzers
+        if: steps.variant.outputs.has_project == 'true'
+        run: echo n | python3 /tmp/oss-fuzz/infra/helper.py build_fuzzers --sanitizer address "$PROJECT" "$GITHUB_WORKSPACE"
+
+      - name: Resolve merge-base
+        id: merge-base
+        if: matrix.variant == 'current' && steps.variant.outputs.has_project == 'true'
+        run: |
+          git remote set-head origin -a >/dev/null 2>&1 || true
+          DEFAULT_BRANCH=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|origin/||')
+          [ -z "$DEFAULT_BRANCH" ] && DEFAULT_BRANCH=main
+          if ! git rev-parse --verify "origin/$DEFAULT_BRANCH" >/dev/null 2>&1; then
+            DEFAULT_BRANCH=master
+          fi
+          echo "sha=$(git merge-base "origin/$DEFAULT_BRANCH" HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Verify new seeds
+        if: matrix.variant == 'current' && steps.variant.outputs.has_project == 'true'
+        uses: ./.github/actions/check-new-seeds
+        with:
+          project: ${{ env.PROJECT }}
+          base_sha: ${{ steps.merge-base.outputs.sha }}
+          out_base: /tmp/oss-fuzz/build/out
+          seeds_dir: .github/fuzz/seeds
+
+      - name: Fuzz
+        if: steps.variant.outputs.has_project == 'true'
+        uses: ./.github/actions/fuzz-all
+        with:
+          project: ${{ env.PROJECT }}
+          helper_py: /tmp/oss-fuzz/infra/helper.py
+          out_dir: /tmp/oss-fuzz/build/out/${{ env.PROJECT }}
+          corpus_root: /tmp/oss-fuzz/corpus/${{ env.PROJECT }}
+          logs_dir: /tmp/oss-fuzz/fuzz-logs
+          fuzz_seconds: ${{ env.FUZZ_SECONDS }}
+
+      - name: Coverage
+        if: steps.variant.outputs.has_project == 'true'
+        run: |
+          echo n | python3 /tmp/oss-fuzz/infra/helper.py build_fuzzers --sanitizer coverage "$PROJECT" "$GITHUB_WORKSPACE"
+
+          mkdir -p "/tmp/oss-fuzz/build/corpus"
+          ln -sfn "/tmp/oss-fuzz/corpus/$PROJECT" "/tmp/oss-fuzz/build/corpus/$PROJECT"
+
+          python3 /tmp/oss-fuzz/infra/helper.py coverage \
+            --no-corpus-download --no-serve \
+            "$PROJECT" 2>&1 || true
+
+      - name: Reachability
+        if: steps.variant.outputs.has_project == 'true'
+        # Static-reachability is a soft signal; an -flto-unfriendly project must
+        # not poison the rest of the report.
+        continue-on-error: true
+        run: echo n | python3 /tmp/oss-fuzz/infra/helper.py build_fuzzers --sanitizer introspector "$PROJECT" "$GITHUB_WORKSPACE"
+
+      - name: Collect stats
+        if: always()
+        uses: ./.github/actions/collect-fuzz-stats
+        with:
+          project: ${{ env.PROJECT }}
+          variant: ${{ matrix.variant }}
+          sha: ${{ steps.variant.outputs.sha }}
+          has_project: ${{ steps.variant.outputs.has_project }}
+          out_base: /tmp/oss-fuzz/build/out
+
+      - name: Upload stats
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: stats-${{ matrix.variant }}
+          path: stats-${{ matrix.variant }}/
+          if-no-files-found: error
+
+      - name: Upload coverage report
+        if: always() && steps.variant.outputs.has_project == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-report-${{ matrix.variant }}
+          path: /tmp/oss-fuzz/build/out/*coverage*/report/
+          if-no-files-found: ignore
+
+  report:
+    name: Report
+    needs: [measure]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # post sticky fuzz-verify comment
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/actions/post-fuzz-report
+      - uses: ./.github/actions/post-fuzz-report
+        with:
+          footer: upstream
+          fuzz_seconds: ${{ env.FUZZ_SECONDS }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}

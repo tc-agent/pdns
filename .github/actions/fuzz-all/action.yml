@@ -1,0 +1,48 @@
+name: Fuzz all harnesses
+description: Run every libFuzzer harness in $OUT concurrently for fuzz_seconds wall-time, capturing per-harness logs.
+
+inputs:
+  project:
+    description: oss-fuzz project name (or path, in external mode).
+    required: true
+  helper_py:
+    description: Path to oss-fuzz infra/helper.py.
+    required: true
+  out_dir:
+    description: Path to build/out/<project> with the harness binaries.
+    required: true
+  corpus_root:
+    description: Parent directory for per-harness corpus dirs.
+    required: true
+  logs_dir:
+    description: Directory for per-harness raw fuzz logs.
+    required: true
+  fuzz_seconds:
+    description: Wall-time budget per harness (passed as -max_total_time).
+    required: true
+  external:
+    description: Pass --external to helper.py run_fuzzer (for ClusterFuzzLite-style projects).
+    required: false
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        PROJECT: ${{ inputs.project }}
+        HELPER_PY: ${{ inputs.helper_py }}
+        OUT_DIR: ${{ inputs.out_dir }}
+        CORPUS_ROOT: ${{ inputs.corpus_root }}
+        LOGS_DIR: ${{ inputs.logs_dir }}
+        FUZZ_SECONDS: ${{ inputs.fuzz_seconds }}
+        EXTERNAL_FLAG: ${{ inputs.external == 'true' && '--external' || '' }}
+      run: |
+        python3 "$GITHUB_ACTION_PATH/run_fuzzers.py" \
+          --helper-py "$HELPER_PY" \
+          --project "$PROJECT" \
+          --out-dir "$OUT_DIR" \
+          --corpus-root "$CORPUS_ROOT" \
+          --logs-dir "$LOGS_DIR" \
+          --max-total-time "$FUZZ_SECONDS" \
+          $EXTERNAL_FLAG
